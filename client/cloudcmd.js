@@ -5,6 +5,10 @@ require('../css/nojs.css');
 require('../css/columns/name-size-date.css');
 require('../css/columns/name-size.css');
 
+const {promisify} = require('es6-promisify');
+const wraptile = require('wraptile/legacy');
+const noop = () => {};
+
 const {
     registerSW,
 } = require('./sw/register');
@@ -22,13 +26,13 @@ module.exports = window.CloudCmd = (config) => {
     window.DOM = DOM;
     window.CloudCmd = require('./client');
     
-    registerSW(config.prefix);
-    
-    const prefix = getPrefix(config.prefix);
+    register(config);
     
     require('./listeners');
     require('./key');
     require('./sort');
+    
+    const prefix = getPrefix(config.prefix);
     
     window.CloudCmd.init(prefix, config);
 };
@@ -40,6 +44,24 @@ function getPrefix(prefix) {
     if (!prefix.indexOf('/'))
         return prefix;
     
-    return '/' + prefix;
+    return `/${prefix}`;
 }
 
+const onUpdateFound = wraptile(async (config) => {
+    const {prefix} = config;
+    
+    const js = promisify(window.DOM.load.js);
+    const css = promisify(window.DOM.load.css);
+    
+    await js(`${prefix}dist/cloudcmd.common.js`),
+    await js(`${prefix}dist/cloudcmd.js`),
+    
+    window.CloudCmd(config);
+});
+
+async function register(config) {
+    const {prefix} = config;
+    const sw = await registerSW(prefix)
+    
+    sw.addEventListener('updatefound', onUpdateFound(config));
+}
